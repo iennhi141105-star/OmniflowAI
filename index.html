@@ -110,11 +110,17 @@ async function requestGeminiSuggestion(){
   let data;
   try{data=await response.json()}catch(_){throw new Error('Worker trả về dữ liệu không đọc được.');}
   if(!response.ok){
-    const detail=data?.error||data?.message||`HTTP ${response.status}`;
-    throw new Error(detail);
+    // Gemini returns an error object; extract its message instead of showing [object Object].
+    const detail = typeof data?.error === 'string'
+      ? data.error
+      : (data?.error?.message || data?.message || data?.details || `HTTP ${response.status}`);
+    throw new Error(String(detail));
   }
   const text=data?.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join('').trim();
-  if(!text) throw new Error(data?.error?.message||'Gemini chưa trả về nội dung. Hãy kiểm tra API Key và Worker.');
+  if(!text) {
+    const detail = typeof data?.error === 'string' ? data.error : data?.error?.message;
+    throw new Error(detail || 'Gemini chưa trả về nội dung. Hãy kiểm tra API Key, hạn mức và Worker Logs.');
+  }
   return text;
 }
 function suggestion(){let c=state.conversations.find(c=>c.id===selectedConv);if(!c)return '';const t=(c.messages.filter(m=>m.from==='customer').at(-1)?.text||'').toLowerCase(),n=customer(c.customerId).name.split(' ').slice(-1)[0];let answer='Dạ em chào anh/chị '+n+' ạ! Shop đã nhận được yêu cầu và sẽ kiểm tra thông tin để tư vấn chính xác nhất ạ.';if(t.includes('giá')){let p=state.products.find(p=>t.includes(p.name.toLowerCase().split(' ')[0])||p.name.toLowerCase().split(' ').some(w=>w.length>=4&&t.includes(w)));answer=p?`Dạ sản phẩm ${p.name} hiện có giá ${money(p.price)}. Kho demo đang ghi nhận ${p.stock} sản phẩm. Em có thể hỗ trợ mình chọn mẫu phù hợp ạ!`:'Dạ anh/chị cho shop xin tên hoặc ảnh sản phẩm để em báo giá chính xác ạ.'}else if(t.includes('ship')||t.includes('vận chuyển'))answer=state.faq.find(f=>f.q.toLowerCase().includes('vận chuyển'))?.a||answer;else if(t.includes('mua')||t.includes('chốt')||t.includes('đặt'))answer='Dạ em cảm ơn anh/chị đã quan tâm! Anh/chị cho shop xin tên sản phẩm, số lượng và địa chỉ nhận hàng để nhân viên kiểm tra và xác nhận đơn nhé.';return state.config.tone==='Chuyên nghiệp'?answer.replaceAll('Dạ ','').replaceAll('ạ!','.'):(state.config.tone==='Ngắn gọn'?answer.slice(0,140):answer)}
